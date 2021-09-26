@@ -1,0 +1,5 @@
+language = "C"
+documentation = true
+documentation_style = "c99"
+style = "type"
+cpp_compat = true
