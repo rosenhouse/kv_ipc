@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::os::raw::c_char;
 use std::os::raw::c_int;
 use std::os::unix::io::IntoRawFd;
@@ -6,10 +7,8 @@ use std::path::Path;
 use std::slice::from_raw_parts;
 use std::{ffi::CStr, os::unix::prelude::FromRawFd};
 
-use serde::{Deserialize, Serialize};
-
-type Result = ::std::result::Result<(), Box<dyn ::std::error::Error>>;
-type IOResult<T> = std::io::Result<T>;
+use crate::SerializableRecord;
+use crate::{IOResult, Result};
 
 /// Record that may be inserted into the server
 #[repr(C)]
@@ -61,8 +60,8 @@ pub extern "C" fn kvclient_insert(kvclient: KVClient, record: &KVClientRecord) -
 
     let record = SerializableRecord {
         table_id: record.table_id,
-        key: unsafe { from_raw_parts(record.key_data, record.key_size) },
-        value: unsafe { from_raw_parts(record.value_data, record.value_size) },
+        key: Cow::Borrowed(unsafe { from_raw_parts(record.key_data, record.key_size) }),
+        value: Cow::Borrowed(unsafe { from_raw_parts(record.value_data, record.value_size) }),
     };
     match kvclient.insert(&record) {
         Ok(()) => {
@@ -75,23 +74,16 @@ pub extern "C" fn kvclient_insert(kvclient: KVClient, record: &KVClientRecord) -
     }
 }
 
-// internal representation of the record
-#[derive(Serialize, Deserialize)]
-pub struct SerializableRecord<'a> {
-    pub table_id: u32,
-    pub key: &'a [u8],
-    pub value: &'a [u8],
-}
-
 impl KVClient {
     pub fn connect<P: AsRef<Path>>(path: P) -> IOResult<Self> {
-        let ud = UnixDatagram::bind(path)?;
+        let ud = UnixDatagram::unbound()?;
+        ud.connect(path)?;
         Ok(KVClient {
             fd: ud.into_raw_fd(),
         })
     }
 
-    pub fn insert(self, record: &SerializableRecord) -> Result {
+    pub fn insert(self, record: &SerializableRecord) -> Result<()> {
         let buf = rmp_serde::to_vec(record)?;
 
         // move fd into ud
@@ -114,7 +106,7 @@ mod tests {
     use std::os::unix::prelude::AsRawFd;
 
     #[test]
-    fn roundtrip_ud_via_fd() -> Result {
+    fn roundtrip_ud_via_fd() -> Result<()> {
         let ud = UnixDatagram::unbound()?;
 
         let orig_fd = ud.as_raw_fd();
