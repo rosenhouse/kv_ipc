@@ -7,6 +7,11 @@ edition = "2018"
 name = "kv_ipc_client"
 crate-type = ["staticlib"]
 
+[profile.release]
+lto = true  # reduce size of built library
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+rmp-serde = "0.15.5"
+serde = { version = "1.0", features = ["derive"] }
