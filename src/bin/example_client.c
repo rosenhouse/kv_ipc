@@ -14,8 +14,8 @@ int main (int argc, char *argv[]){
       return 1;
    }
 
-   unsigned char key[] = {10, 20, 30};
-   unsigned char value[] = {100, 200};
+   unsigned char key[16] = {10, 20, 30};
+   unsigned char value[100] = {100, 200};
 
    KVClientRecord record = {
       .table_id = 42,
@@ -25,10 +25,12 @@ int main (int argc, char *argv[]){
       .value_data = value,
    };
 
-   rc = kvclient_insert(client, &record);
-   if (rc != 0) {
-      fprintf(stderr, "insert error: %d\n", rc);
-      return 1;
+   for (;;) {
+      rc = kvclient_insert(client, &record);
+      if (rc != 0) {
+         fprintf(stderr, "insert error: %d\n", rc);
+         return 1;
+      }
    }
    return 0;
 }
