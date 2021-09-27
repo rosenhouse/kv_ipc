@@ -19,8 +19,6 @@ impl KVServer {
         if num_bytes_read >= buffer.len() {
             panic!("receive truncated a message.  Grow your buffer");
         }
-        let to_decode = &buffer[..num_bytes_read];
-        eprintln!("read {} bytes from ud: {:?}", num_bytes_read, &to_decode);
         let rec: SerializableRecord = rmp_serde::from_read_ref(buffer)?;
         Ok(rec)
     }

@@ -38,7 +38,6 @@ pub struct KVClient {
 #[no_mangle]
 pub extern "C" fn kvclient_open(path: *const c_char, kvclient_out: &mut KVClient) -> c_int {
     let path = unsafe { CStr::from_ptr(path) }.to_str().unwrap();
-    eprintln!("libkv_ipc_client: kvclient_open: {}", path);
     match KVClient::connect(path) {
         Ok(kvclient) => {
             *kvclient_out = kvclient;
@@ -56,8 +55,6 @@ pub extern "C" fn kvclient_open(path: *const c_char, kvclient_out: &mut KVClient
 /// Returns 0 on success
 #[no_mangle]
 pub extern "C" fn kvclient_insert(kvclient: KVClient, record: &KVClientRecord) -> c_int {
-    eprintln!("libkv_ipc_client: kvclient_insert");
-
     let record = SerializableRecord {
         table_id: record.table_id,
         key: Cow::Borrowed(unsafe { from_raw_parts(record.key_data, record.key_size) }),

@@ -1,6 +1,9 @@
 mod client;
 mod server;
 
+pub use crate::client::KVClient;
+pub use crate::server::KVServer;
+
 use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};

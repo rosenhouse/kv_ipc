@@ -1,19 +1,31 @@
-# ipc-pair
+# kv_ipc
 
 Exploring a couple things in Rust:
-- C program using a Rust library
-- IPC in Rust
+- C program uses a Rust library
+- Unix domain datagram sockets for interprocess communication
 
 ## Components
-- `./example_client` is a C program that calls the Rust library
-- `./include/libkv_ipc_client.h` is the C header for the Rust library
-- `./src/ipc_client.rs` is the source for the Rust library, providing IPC
+- `./src/bin/example_client.c`: a C program that calls the Rust library
+- `./include/libkv_ipc_client.h`: the C header for the Rust library
+- `./src/lib.rs`: Rust library
+- `./src/bin/example_server.rs`: a Rust program that receives messages from the C program
 
-## Building the example client
+## Building and testing
+Build the components
 ```sh
+cargo install cbindgen
 cargo build
 ./regenerate_c_header.sh
-cc -I ./include -L ./target/debug -lkv_ipc_client -o ./target/debug/example_client ./example_client/example_client.c
-./target/debug/example_client
+./rebuild_example_client.sh
+```
+
+Launch the server, listening on a socket
+```
+./target/debug/example_server /tmp/my-socket
+```
+
+Send a message from the C program to that socket
+```
+./target/debug/example_client /tmp/my-socket
 ```
 

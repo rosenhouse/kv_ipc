@@ -1,11 +1,11 @@
 [package]
-name = "ipc-pair"
+name = "kv_ipc"
 version = "0.1.0"
 edition = "2018"
 
 [lib]
-name = "kv_ipc_client"
-crate-type = ["staticlib"]
+name = "kv_ipc"
+crate-type = ["lib", "staticlib"]
 
 [profile.release]
 lto = true  # reduce size of built library
