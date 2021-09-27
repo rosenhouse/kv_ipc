@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "libkv_ipc_client.h"
+#include "libkv_ipc.h"
 
 int main (int argc, char *argv[]){
    if (argc <= 1) {
