@@ -72,7 +72,7 @@ fn handle_data_channel(data_channel: UnixDatagram, data_channel_path: String) {
         .unwrap();
 
     let mut counter = 0;
-    let mut buf = [0u8; 255];
+    let mut buf = [0u8; 2550];
     loop {
         let recv_result = data_channel.recv(&mut buf[..]);
         let bytes_received = match recv_result {

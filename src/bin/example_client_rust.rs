@@ -71,7 +71,7 @@ fn main() -> Result<()> {
 
     use rand::SeedableRng;
     let mut rng = rand_pcg::Pcg64::seed_from_u64(0);
-    let mut buf = [0u8; 155];
+    let mut buf = [0u8; 1550];
     let num_messages = opts.number;
     use std::io::ErrorKind;
 
