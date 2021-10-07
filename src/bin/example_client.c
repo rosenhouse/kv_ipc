@@ -25,7 +25,7 @@ int main (int argc, char *argv[]){
       .value_data = value,
    };
 
-   for (;;) {
+   for (int i=0;i<100000;i++) {
       rc = kvclient_insert(client, &record);
       if (rc != 0) {
          fprintf(stderr, "insert error: %d\n", rc);

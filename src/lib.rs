@@ -4,7 +4,7 @@ mod server;
 pub use crate::client::KVClient;
 pub use crate::server::KVServer;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, os::unix::prelude::PermissionsExt};
 
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +23,14 @@ pub struct SerializableRecord<'a> {
     #[serde(with = "serde_bytes")]
     #[serde(borrow)]
     pub value: Cow<'a, [u8]>,
+}
+
+pub fn new_socket_path() -> String {
+    let mut path = tempfile::TempDir::new().unwrap().into_path();
+    let mut perms = std::fs::metadata(&path).unwrap().permissions();
+    perms.set_mode(0x1777);
+    path.push("socket");
+    path.as_path().to_str().unwrap().to_owned()
 }
 
 #[cfg(test)]
