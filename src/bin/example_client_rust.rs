@@ -1,16 +1,10 @@
 type Result<T> = ::std::result::Result<T, Box<dyn ::std::error::Error>>;
 
-use std::os::unix::net::UnixDatagram;
+use std::{net::Shutdown, os::unix::net::UnixDatagram};
 
-fn main() -> Result<()> {
-    let args: Vec<String> = ::std::env::args().collect();
-    if args.len() <= 1 {
-        eprintln!("usage: {} <control socket path>\n", args[0]);
-        return Err("missing required arg".into());
-    }
+use rand::RngCore;
 
-    let control_socket_path = &args[1];
-
+fn get_data_channel(control_socket_path: &str) -> Result<UnixDatagram> {
     let local_path = kv_ipc::new_socket_path();
 
     eprintln!("binding to local socket {}", local_path);
@@ -22,14 +16,13 @@ fn main() -> Result<()> {
     eprintln!("sending an empty message, to ask for a data socket");
     socket.send(&[])?;
 
+    // once rust supports passing fd via unix sockets, this gets way simpler
     eprintln!("waiting for a response specifying the data socket location");
-    let mut buf = [0u8; 150];
+    let mut buf = [0u8; 255];
     let num_received = socket.recv(&mut buf[..])?;
     if num_received >= buf.len() {
         panic!("path too long");
     }
-    // once rust supports passing fd via unix sockets,
-    // then this gets a lot simpler
     let data_channel_path: String = rmp_serde::from_read_ref(&buf)?;
 
     eprintln!("connecting to data channel at {}", data_channel_path);
@@ -49,15 +42,67 @@ fn main() -> Result<()> {
     eprintln!("removing local socket path {}", local_path);
     std::fs::remove_file(local_path).unwrap();
 
-    eprintln!("starting to send messages...");
-    let num_messages = 100000;
-    for i in 1..num_messages {
-        socket.send(&buf)?;
+    Ok(socket)
+}
 
-        if i % 100 == 0 {
+use clap::{AppSettings, Clap};
+
+/// Performance testing tool
+#[derive(Clap)]
+#[clap(version = "0.1")]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Opts {
+    /// unix socket to connect to
+    #[clap(long, default_value = "/tmp/kv-ipc-control-channel")]
+    control_channel: String,
+
+    /// Number of messages to send
+    #[clap(short, long, default_value = "1000")]
+    number: u32,
+}
+
+fn main() -> Result<()> {
+    let opts: Opts = Opts::parse();
+
+    let control_socket_path = &opts.control_channel;
+    let socket = get_data_channel(control_socket_path)?;
+
+    eprintln!("starting to send messages...");
+
+    use rand::SeedableRng;
+    let mut rng = rand_pcg::Pcg64::seed_from_u64(0);
+    let mut buf = [0u8; 155];
+    let num_messages = opts.number;
+    use std::io::ErrorKind;
+
+    for i in 1..num_messages + 1 {
+        rng.fill_bytes(&mut buf);
+        buf[0] = i as u8;
+
+        let bytes_sent = socket.send(&buf).unwrap();
+        if bytes_sent != buf.len() {
+            panic!("didn't send enough bytes");
+        }
+
+        // consume any healthcheck messages
+        socket.set_nonblocking(true)?;
+        loop {
+            match socket.recv(&mut []) {
+                Ok(_) => continue,
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    socket.set_nonblocking(false).unwrap();
+                    break;
+                }
+                Err(e) => return Err(Box::new(e)),
+            }
+        }
+        socket.set_nonblocking(false)?;
+
+        if i % 10000 == 0 {
             eprint!(".");
         }
     }
+    socket.shutdown(Shutdown::Both)?;
 
     eprintln!("sent {} messages", num_messages);
     Ok(())

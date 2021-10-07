@@ -1,16 +1,30 @@
+use std::io::ErrorKind;
 use std::os::unix::net::UnixDatagram;
 use std::thread;
 
+use clap::{AppSettings, Clap};
+
 type Result<T> = ::std::result::Result<T, Box<dyn ::std::error::Error>>;
 
-fn main() -> Result<()> {
-    let args: Vec<String> = ::std::env::args().collect();
-    if args.len() <= 1 {
-        eprintln!("usage: {} <control socket path>\n", args[0]);
-        return Err("missing required arg".into());
-    }
+/// Performance testing tool
+#[derive(Clap)]
+#[clap(version = "0.1")]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Opts {
+    /// unix socket to listen on
+    #[clap(long, default_value = "/tmp/kv-ipc-control-channel")]
+    control_channel: String,
+}
 
-    let control_socket_path = &args[1];
+fn main() -> Result<()> {
+    let opts: Opts = Opts::parse();
+
+    let control_socket_path = opts.control_channel;
+    match std::fs::remove_file(&control_socket_path) {
+        Ok(()) => (),
+        Err(ref e) if e.kind() == ErrorKind::NotFound => (),
+        Err(e) => panic!("remove file error for {}: {}", control_socket_path, e),
+    }
     let control_channel = UnixDatagram::bind(control_socket_path)?;
 
     // control loop, handling requests for data channels
@@ -53,13 +67,39 @@ fn handle_data_channel(data_channel: UnixDatagram, data_channel_path: String) {
     eprintln!("sending empty message back to signal ready");
     data_channel.send(&mut []).unwrap();
 
+    data_channel
+        .set_read_timeout(Some(std::time::Duration::from_millis(100)))
+        .unwrap();
+
     let mut counter = 0;
     let mut buf = [0u8; 255];
     loop {
-        let bytes_received = match data_channel.recv(&mut buf[..]) {
+        let recv_result = data_channel.recv(&mut buf[..]);
+        let bytes_received = match recv_result {
             Ok(n) => n,
+            Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                // timeout error
+                eprintln!("testing if socket is still alive...");
+                data_channel.set_nonblocking(true).unwrap();
+                let send_result = data_channel.send(&mut []);
+                data_channel.set_nonblocking(false).unwrap();
+                match send_result {
+                    Err(e) if e.kind() == ErrorKind::ConnectionRefused => {
+                        eprintln!("peer closed the socket");
+                        break;
+                    }
+                    Err(e) => {
+                        eprintln!("healthcheck socket send error: {}", e);
+                        break;
+                    }
+                    Ok(_) => {
+                        // yes still alive, try again
+                        continue;
+                    }
+                };
+            }
             Err(e) => {
-                eprintln!("data channel error: {}", e);
+                eprintln!("read error, will break: {}", e);
                 break;
             }
         };
@@ -67,8 +107,13 @@ fn handle_data_channel(data_channel: UnixDatagram, data_channel_path: String) {
             panic!("buffer too small!");
         }
         counter += 1;
-        if counter % 100 == 0 {
+        if buf[0] != (counter as u8) {
+            panic!("missed a message");
+        }
+        if counter % 10000 == 0 {
             eprint!(".");
         }
     }
+
+    eprintln!("received {} messages from {:?}", counter, client_address);
 }
